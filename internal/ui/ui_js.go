@@ -16,6 +16,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"syscall/js"
@@ -124,6 +125,7 @@ var (
 	window                = js.Global().Get("window")
 	document              = js.Global().Get("document")
 	screen                = js.Global().Get("screen")
+	parentHTMLElement     = js.Global().Get("wasmParent")
 	canvas                js.Value
 	requestAnimationFrame = js.Global().Get("requestAnimationFrame")
 	setTimeout            = js.Global().Get("setTimeout")
@@ -271,6 +273,10 @@ func (u *UserInterface) SetCursorShape(shape CursorShape) {
 func (u *UserInterface) outsideSize() (float64, float64) {
 	if document.Truthy() {
 		body := document.Get("body")
+		if parentHTMLElement.Truthy() {
+			body = parentHTMLElement
+		}
+
 		bw := body.Get("clientWidth").Float()
 		bh := body.Get("clientHeight").Float()
 		return bw, bh
@@ -497,7 +503,11 @@ func (u *UserInterface) init() error {
 	canvas.Set("width", 16)
 	canvas.Set("height", 16)
 
-	document.Get("body").Call("appendChild", canvas)
+	if parentHTMLElement.Truthy() {
+		parentHTMLElement.Call("appendChild", canvas)
+	} else {
+		document.Get("body").Call("appendChild", canvas)
+	}
 
 	htmlStyle := document.Get("documentElement").Get("style")
 	htmlStyle.Set("height", "100%")
@@ -505,10 +515,15 @@ func (u *UserInterface) init() error {
 	htmlStyle.Set("padding", "0")
 
 	bodyStyle := document.Get("body").Get("style")
-	bodyStyle.Set("backgroundColor", "#000")
 	bodyStyle.Set("height", "100%")
 	bodyStyle.Set("margin", "0")
 	bodyStyle.Set("padding", "0")
+
+	if parentHTMLElement.Truthy() {
+		parentHTMLElement.Get("style").Set("backgroundColor", "#000")
+	} else {
+		bodyStyle.Set("backgroundColor", "#000")
+	}
 
 	canvasStyle := canvas.Get("style")
 	canvasStyle.Set("width", "100%")
@@ -785,7 +800,11 @@ func (u *UserInterface) initOnMainThread(options *RunOptions) error {
 	u.graphicsDriver = g
 	u.setGraphicsLibrary(lib)
 
-	if bodyStyle := document.Get("body").Get("style"); options.ScreenTransparent {
+	body := document.Get("body")
+	if parentHTMLElement.Truthy() {
+		body = parentHTMLElement
+	}
+	if bodyStyle := body.Get("style"); options.ScreenTransparent {
 		bodyStyle.Set("backgroundColor", "transparent")
 	} else {
 		bodyStyle.Set("backgroundColor", "#000")
@@ -797,9 +816,14 @@ func (u *UserInterface) initOnMainThread(options *RunOptions) error {
 func (u *UserInterface) updateScreenSize() {
 	if document.Truthy() {
 		body := document.Get("body")
+		if parentHTMLElement.Truthy() {
+			body = parentHTMLElement
+		}
+
 		f := theMonitor.DeviceScaleFactor()
 		bw := int(body.Get("clientWidth").Float() * f)
 		bh := int(body.Get("clientHeight").Float() * f)
+		fmt.Println("updateScreenSize", bw, bh)
 		canvas.Set("width", bw)
 		canvas.Set("height", bh)
 	}
